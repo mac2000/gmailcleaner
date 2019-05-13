@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>gmail cleaner</title>
+  </head>
+  <body>
+    <button id="signin">signin</button>
+    <button id="signout">signout</button>
+    <button id="disconnect">disconnect</button>
+    <button id="start">start</button>
+    <button id="cancel">stop</button>
+    <hr />
+    <h3 id="progress"></h3>
+    <div id="tables" hidden>
+      <table>
+        <tr>
+          <td valign="top">
+            <fieldset>
+              <legend>from</legend>
+              <table id="tblFrom" cellpadding="5" cellspacing="0" border="1"></table>
+            </fieldset>
+          </td>
+          <td valign="top">
+            <fieldset>
+              <legend>subject</legend>
+              <table id="tblSubject" cellpadding="5" cellspacing="0" border="1"></table>
+            </fieldset>
+          </td>
+          <td valign="top">
+            <fieldset>
+              <legend>year</legend>
+              <table id="tblYears" cellpadding="5" cellspacing="0" border="1"></table>
+            </fieldset>
+            <fieldset>
+              <legend>label</legend>
+              <table id="tblLabels" cellpadding="5" cellspacing="0" border="1"></table>
+            </fieldset>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <script>
+      let work = false;
+      const subjects = {};
+      const froms = {};
+      const years = {};
+      const labels = {};
+
+      const load = () => {
+        const script = document.createElement("script");
+        script.src = "https://apis.google.com/js/api.js";
+        script.async = true;
+        script.defer = true;
+        script.onload = () =>
+          gapi.load("client:auth2", () =>
+            gapi.client
+              .init({
+                clientId: "496133167529-0jvhdv9ho2kafmd539gkt34305d07mln.apps.googleusercontent.com",
+                apiKey: "AIzaSyBntiavrd-jclspxwLcplr1aRKD5zc-SlE",
+                scope: "https://www.googleapis.com/auth/gmail.readonly",
+                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest"]
+              })
+              .then(() => {
+                gapi.auth2.getAuthInstance().isSignedIn.listen(handleAuth);
+                handleAuth(gapi.auth2.getAuthInstance().isSignedIn.get());
+              })
+          );
+
+        document.body.appendChild(script);
+      };
+
+      const handleAuth = isSignedIn => {
+        signin.hidden = isSignedIn;
+        signout.hidden = !isSignedIn;
+        disconnect.hidden = !isSignedIn;
+        start.hidden = !isSignedIn;
+        cancel.hidden = true;
+        // if (isSignedIn) {
+        //   getMessages();
+        // }
+      };
+
+      const incr = (obj, key) => {
+        if (!(key in obj)) {
+          obj[key] = 0;
+        }
+        obj[key] += 1;
+      };
+
+      const getMessages = async (pageToken = null) => {
+        processed = 0;
+        do {
+          const {
+            result: { messages, nextPageToken }
+          } = await gapi.client.gmail.users.messages.list({ userId: "me", includeSpamTrash: true, maxResults: 500, pageToken });
+
+          const batch = gapi.client.newBatch();
+          for ({ id } of messages) {
+            batch.add(gapi.client.gmail.users.messages.get({ userId: "me", id: id, format: "metadata" }), { id: id });
+          }
+
+          await batch
+            .then(({ result }) => Object.values(result))
+            .then(messages => {
+              messages
+                .filter(({ status }) => status === 200)
+                .forEach(({ result: { id, internalDate, labelIds, payload: { headers } } }) => {
+                  const from = (headers.find(h => h.name === "From") || { value: null }).value;
+                  incr(froms, from);
+
+                  const subject = (headers.find(h => h.name === "Subject") || { value: null }).value;
+                  incr(subjects, subject);
+
+                  const year = new Date(parseInt(internalDate, 10)).getFullYear();
+                  incr(years, year);
+
+                  if (labelIds) labelIds.forEach(label => incr(labels, label));
+                  processed += 1;
+                });
+              render();
+            });
+
+          pageToken = nextPageToken;
+          progress.textContent = `messages processed: ${processed}`;
+        } while (pageToken && work);
+      };
+
+      const top20 = obj =>
+        Object.keys(obj)
+          .sort((a, b) => obj[b] - obj[a])
+          .slice(0, 20)
+          .reduce((acc, key) => Object.assign(acc, { [key]: obj[key] }), {});
+
+      const esc = html => {
+        const span = document.createElement("span");
+        span.textContent = html;
+        return span.innerHTML;
+      };
+
+      const renderTable = obj =>
+        Object.keys(obj)
+          .sort((a, b) => obj[b] - obj[a])
+          .map(key => `<tr><td align="right">${obj[key]}</td><td>${esc(key)}</td></tr>`)
+          .join("");
+
+      const render = async () => {
+        tblFrom.innerHTML = renderTable(top20(froms));
+        tblSubject.innerHTML = renderTable(top20(subjects));
+        tblYears.innerHTML = renderTable(years);
+        tblLabels.innerHTML = renderTable(labels);
+
+        tables.hidden = false;
+      };
+
+      signin.addEventListener("click", event => {
+        event.preventDefault();
+        gapi.auth2.getAuthInstance().signIn();
+      });
+
+      signout.addEventListener("click", event => {
+        event.preventDefault();
+        gapi.auth2.getAuthInstance().signOut();
+      });
+
+      disconnect.addEventListener("click", event => {
+        event.preventDefault();
+        gapi.auth2.getAuthInstance().disconnect();
+      });
+
+      start.addEventListener("click", event => {
+        event.preventDefault();
+        work = true;
+        start.hidden = true;
+        cancel.hidden = false;
+        getMessages();
+      });
+
+      cancel.addEventListener("click", event => {
+        event.preventDefault();
+        work = false;
+        start.hidden = false;
+        cancel.hidden = true;
+      });
+
+      load();
+    </script>
+  </body>
+</html>
