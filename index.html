@@ -19,6 +19,12 @@
         <tr>
           <td valign="top">
             <fieldset>
+              <legend>suspicious</legend>
+              <table id="tblSusp" cellpadding="5" cellspacing="0" border="1"></table>
+            </fieldset>
+          </td>
+          <td valign="top">
+            <fieldset>
               <legend>from</legend>
               <table id="tblFrom" cellpadding="5" cellspacing="0" border="1"></table>
             </fieldset>
@@ -53,6 +59,22 @@
       const froms = {};
       const years = {};
       const labels = {};
+      const suspiciouses = {};
+
+      const extractEmail = str =>
+        (str || "")
+          .split("<")
+          .pop()
+          .split(">")
+          .shift();
+
+      const extractUsername = email =>
+        (email || "")
+          .split("@")
+          .shift()
+          .toLowerCase();
+
+      const isSuspicious = str => ["do-not-reply", "noreply", "no-reply", "donotreply", "notifications", "news", "subscription", "newsletter", "service", "support", "marketing", "hi", "hello", "campaign", "info", "robot", "communications", "service"].indexOf(str) !== -1;
 
       const load = () => {
         const script = document.createElement("script");
@@ -122,6 +144,11 @@
                   const year = new Date(parseInt(internalDate, 10)).getFullYear();
                   incr(years, year);
 
+                  if (isSuspicious(extractUsername(extractEmail(from)))) {
+                    console.log(extractEmail(from), extractUsername(extractEmail(from)));
+                    incr(suspiciouses, extractEmail(from));
+                  }
+
                   if (labelIds) labelIds.forEach(label => incr(labels, label));
                   processed += 1;
                 });
@@ -156,6 +183,7 @@
         tblSubject.innerHTML = renderTable(top20(subjects));
         tblYears.innerHTML = renderTable(years);
         tblLabels.innerHTML = renderTable(labels);
+        tblSusp.innerHTML = renderTable(suspiciouses);
 
         tables.hidden = false;
       };
