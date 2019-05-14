@@ -175,7 +175,7 @@
       const renderTable = obj =>
         Object.keys(obj)
           .sort((a, b) => obj[b] - obj[a])
-          .map(key => `<tr><td align="right">${obj[key]}</td><td>${esc(key)}</td></tr>`)
+          .map(key => `<tr><td align="right">${obj[key]}</td><td><a href="https://mail.google.com/mail/u/0/#search/${key}" target="_blank">${esc(key)}</a></td></tr>`)
           .join("");
 
       const render = async () => {
